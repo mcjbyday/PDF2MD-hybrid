@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PDF2MD-hybrid"
+version = "0.1.0"
+description = "Turn born-digital PDFs into grounded Markdown with a local vision model, without sending every page through it."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Michael Jacobs" }]
+requires-python = ">=3.9"
+keywords = ["pdf", "markdown", "rag", "retrieval", "ollama", "local-llm"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+# Permissive licenses only, and deliberately just two. Everything else is the
+# standard library: HTTP goes through urllib rather than adding `requests`.
+# Do not add PyMuPDF (AGPL) or Poppler/pdf2image (GPL) -- a copyleft dependency
+# propagates to anything that links this.
+dependencies = [
+    "pdfplumber>=0.11",   # MIT. Text, per-character font, size and position.
+    "pypdfium2>=5.0",     # Apache-2.0 / BSD-3. Page rasterization.
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+pdf2md = "pipeline:main"
+pdf2md-probe = "probe:main"
+
+[project.urls]
+Homepage = "https://github.com/mcjbyday/PDF2MD-hybrid"
+
+[tool.setuptools]
+py-modules = ["common", "layout", "probe", "extract", "enrich", "assemble", "index", "pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

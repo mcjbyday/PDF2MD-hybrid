@@ -1,0 +1,26 @@
+# Never commit source PDFs or generated output: they are the user's content,
+# frequently copyrighted, and large.
+corpus/
+out/
+*.pdf
+*.jsonl
+*.png
+
+# Generated test fixtures.
+tests/fixtures/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+
+.claude/
+CLAUDE.md
+.aider*
+
+# Packaging build artifacts.
+*.egg-info/
+build/
+dist/
