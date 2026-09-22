@@ -82,11 +82,18 @@ class Corpus:
                 f"no assembled Markdown in {md}. Run the pipeline, or pass md_dir.")
 
         index_path = os.path.join(out_dir, "index.json")
+        index = None
         if os.path.exists(index_path):
-            index = index_stage.load(index_path)
-        else:
-            # Building takes milliseconds at this corpus size, so a missing
-            # index is an inconvenience rather than an error.
+            try:
+                index = index_stage.load(index_path)
+            except ValueError:
+                # Written by an older build and no longer scoreable. Rebuilding
+                # is correct here because the Markdown it describes is right
+                # there; serving it as-is would quietly return wrong rankings.
+                index = None
+        if index is None:
+            # Building takes milliseconds at this corpus size, so a missing or
+            # outdated index is an inconvenience rather than an error.
             index = index_stage.build(md)
         return cls(out_dir, index, md)
 

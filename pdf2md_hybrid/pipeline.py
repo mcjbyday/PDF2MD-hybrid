@@ -75,7 +75,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return rc
 
     if args.model:
-        import enrich
+        from . import enrich
         print("\n== enrich ==")
         argv_enrich = [args.out, "--model", args.model, "--corpus", args.corpus]
         if args.endpoint:
