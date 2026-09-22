@@ -25,7 +25,7 @@ import os
 import re
 import sys
 
-import common
+from . import common
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 # Okapi BM25 defaults. k1 controls term-frequency saturation, b the strength of

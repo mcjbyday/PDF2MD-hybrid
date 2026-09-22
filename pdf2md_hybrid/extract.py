@@ -27,8 +27,8 @@ try:
 except ImportError:  # pragma: no cover - environment guard
     sys.exit("pdfplumber is required: pip install -e .")
 
-import common
-import layout
+from . import common
+from . import layout
 
 
 def _scan_fonts(pdf) -> Dict[str, Any]:

@@ -30,14 +30,22 @@ dependencies = [
 dev = ["pytest>=7"]
 
 [project.scripts]
-pdf2md = "pipeline:main"
-pdf2md-probe = "probe:main"
+pdf2md = "pdf2md_hybrid.pipeline:main"
+pdf2md-probe = "pdf2md_hybrid.probe:main"
+pdf2md-extract = "pdf2md_hybrid.extract:main"
+pdf2md-enrich = "pdf2md_hybrid.enrich:main"
+pdf2md-assemble = "pdf2md_hybrid.assemble:main"
+pdf2md-index = "pdf2md_hybrid.index:main"
 
 [project.urls]
 Homepage = "https://github.com/mcjbyday/PDF2MD-hybrid"
 
 [tool.setuptools]
-py-modules = ["common", "layout", "probe", "extract", "enrich", "assemble", "index", "pipeline"]
+# A real package, not top-level modules. Names like `index`, `common` and
+# `layout` installed at top level would collide with a consuming project's own
+# modules, and an omission from a py-modules list is invisible until someone
+# installs the wheel.
+packages = ["pdf2md_hybrid"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -11,11 +11,8 @@ import os
 
 import pytest
 
-import assemble
-import common
-import enrich
-import extract
-import index as index_stage
+from pdf2md_hybrid import assemble, common, enrich, extract
+from pdf2md_hybrid import index as index_stage
 
 
 # --- 3. triage ------------------------------------------------------------
@@ -295,7 +292,7 @@ def test_index_round_trips_through_json(assembled, tmp_path):
 
 def test_long_row_is_not_a_heading_whatever_its_size(fixtures_dir, tmp_path):
     """A sentence set large is still a sentence."""
-    import layout
+    from pdf2md_hybrid import layout
     long_line = "x" * (layout.HEADING_MAX_CHARS + 20)
     assert len(long_line) > layout.HEADING_MAX_CHARS
 
@@ -358,3 +355,87 @@ def test_index_files_flag_scopes_the_build(assembled, tmp_path):
     assert index_stage.main([assembled, "--out", str(out), "--files", "two-column"]) == 0
     idx = index_stage.load(str(out))
     assert {d["file"] for d in idx["docs"]} == {"two-column"}
+
+
+# --- the package's public API, as a downstream project uses it ------------
+
+def test_stage_modules_are_not_shadowed_by_api_functions():
+    """A public function named after a submodule makes that submodule
+    unreachable, and the break surfaces only when something calls it."""
+    import pdf2md_hybrid
+
+    for name in ("probe", "extract", "enrich", "assemble", "index", "pipeline"):
+        attr = getattr(pdf2md_hybrid, name, None)
+        if attr is not None:
+            assert hasattr(attr, "main"), f"pdf2md_hybrid.{name} is not the stage module"
+    assert callable(pdf2md_hybrid.is_text_native)
+
+
+def test_convert_returns_a_readable_corpus(fixtures_dir, tmp_path):
+    """The whole downstream contract in one call."""
+    import pdf2md_hybrid
+
+    corpus = pdf2md_hybrid.convert(fixtures_dir, str(tmp_path / "out"))
+    assert corpus.stats()["pages"] > 0
+    assert "two-column" in corpus.sources()
+
+    hits = corpus.search("vertical extent cluster", k=1)
+    assert hits and hits[0].file == "two-column"
+    assert hits[0].cite == f"two-column#{hits[0].anchor}"
+    assert "column" in hits[0].text()
+    assert hits[0].cite in corpus.context("vertical extent cluster", k=1)
+
+
+def test_corpus_reads_without_the_source_pdfs(fixtures_dir, tmp_path):
+    """The read side must work where the PDFs never were -- that is what lets a
+    downstream service be a different machine from the one that extracted."""
+    import shutil
+    from pdf2md_hybrid import Corpus, convert
+
+    convert(fixtures_dir, str(tmp_path / "out"))
+    detached = tmp_path / "detached"
+    shutil.copytree(tmp_path / "out", detached)
+
+    corpus = Corpus.open(str(detached))
+    assert corpus.search("configure options", k=1)[0].file == "two-column"
+    assert corpus.snapshot()["tool"]["name"] == "PDF2MD-hybrid"
+
+
+def test_corpus_builds_an_index_when_none_was_written(fixtures_dir, tmp_path):
+    from pdf2md_hybrid import Corpus, convert
+
+    out = tmp_path / "out"
+    convert(fixtures_dir, str(out))
+    os.remove(out / "index.json")
+    assert Corpus.open(str(out)).stats()["pages"] > 0
+
+
+def test_page_is_addressable_by_its_anchor(fixtures_dir, tmp_path):
+    from pdf2md_hybrid import convert
+
+    corpus = convert(fixtures_dir, str(tmp_path / "out"))
+    page = corpus.page("figures", "p001")
+    assert "A short caption" in page
+    assert "Triage must leave this page alone" not in page, "page p002 leaked in"
+
+
+def test_every_stage_main_accepts_argv(fixtures_dir, tmp_path, capsys):
+    """Each stage is callable in-process, not only from a shell.
+
+    `probe` was the odd one out: its `main()` read sys.argv directly, so the
+    public `probe()` wrapper raised TypeError the moment it was given a path.
+    An import check cannot see that; only calling it can.
+    """
+    import inspect
+
+    from pdf2md_hybrid import assemble, enrich, extract, index as index_stage
+    from pdf2md_hybrid import pipeline, probe as probe_stage
+
+    for module in (probe_stage, extract, enrich, assemble, index_stage, pipeline):
+        params = inspect.signature(module.main).parameters
+        assert "argv" in params, f"{module.__name__}.main takes no argv"
+        assert params["argv"].default is None
+
+    import pdf2md_hybrid
+    assert pdf2md_hybrid.is_text_native(fixtures_dir) is True
+    assert "VERDICT" in capsys.readouterr().out

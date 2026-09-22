@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import pdfplumber
 
-import common
-import layout
+from pdf2md_hybrid import common, layout
 
 
 def blocks_for(pages_dir, stem, page=0):

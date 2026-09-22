@@ -24,7 +24,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
-import common
+from . import common
 
 SNAPSHOT_NAME = "pipeline.snapshot.json"
 SCHEMA = 1
@@ -73,7 +73,7 @@ def _heuristics() -> Dict[str, Any]:
     These are the ones that change output without changing the command, which
     is exactly why they belong in the record.
     """
-    import layout
+    from . import layout
     return {name: getattr(layout, name) for name in (
         "SEGMENT_GAP_RATIO", "SPINE_TOLERANCE_RATIO", "SPINE_MIN_ROWS",
         "SPINE_MIN_SEPARATION", "SPINE_MIN_COEXISTING_ROWS",
@@ -85,7 +85,7 @@ def _heuristics() -> Dict[str, Any]:
 
 def capture(corpus: str, out_dir: str, settings: Dict[str, Any]) -> Dict[str, Any]:
     """Build the snapshot for a completed run, including what it produced."""
-    import enrich
+    from . import enrich
 
     files: List[Dict[str, Any]] = []
     for path in common.find_pages_files(out_dir):
@@ -170,7 +170,7 @@ def warn_on_drift(snapshot: Dict[str, Any], stream=sys.stderr) -> List[str]:
     if was_commit and now_commit and was_commit != now_commit:
         drift.append(f"tool commit: snapshot {was_commit[:12]}, now {now_commit[:12]}")
 
-    import enrich
+    from . import enrich
     if snapshot.get("prompt") and snapshot["prompt"] != enrich.PROMPT:
         drift.append("the enrichment prompt has changed")
 

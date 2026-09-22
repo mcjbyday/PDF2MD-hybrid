@@ -20,7 +20,7 @@ import sys
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-import common
+from . import common
 
 # Characters that would otherwise be read as inline HTML outside a code fence.
 _ESCAPE = re.compile(r"[<>]")

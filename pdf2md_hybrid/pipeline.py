@@ -19,11 +19,11 @@ import os
 import sys
 from typing import List, Optional
 
-import assemble
-import common
-import extract
-import index as index_stage
-import snapshot as snapshot_mod
+from . import assemble
+from . import common
+from . import extract
+from . import index as index_stage
+from . import snapshot as snapshot_mod
 
 
 def main(argv: Optional[List[str]] = None) -> int:

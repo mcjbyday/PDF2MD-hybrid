@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
-import common
+from . import common
 
 DEFAULT_ENDPOINT = "http://localhost:11434"
 

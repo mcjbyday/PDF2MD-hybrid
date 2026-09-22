@@ -25,7 +25,7 @@ def fixtures_dir(tmp_path_factory) -> str:
 @pytest.fixture(scope="session")
 def extracted(fixtures_dir, tmp_path_factory) -> str:
     """Run extraction over the fixtures and return the artifact directory."""
-    import extract
+    from pdf2md_hybrid import extract
 
     out = str(tmp_path_factory.mktemp("out"))
     assert extract.main([fixtures_dir, "--out", out]) == 0

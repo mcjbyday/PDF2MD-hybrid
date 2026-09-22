@@ -26,7 +26,7 @@ This pipeline triages first. It parses every page deterministically, then sends 
 | You just need **raw text**, no structure | `pdftotext -layout` command |
 | You have **a handful of documents** | The triage only pays for itself at scale |
 
-`probe.py` tells you which bucket you are in and this can be executed first; `--json report.json` writes a full per-file breakdown for scripting. An exit code of `0` constitutes a fit and `2` suggests a corpus that appears as scanned.
+`pdf2md-probe` tells you which bucket you are in and this can be executed first; `--json report.json` writes a full per-file breakdown for scripting. An exit code of `0` constitutes a fit and `2` suggests a corpus that appears as scanned.
 
 ---
 
@@ -35,8 +35,16 @@ This pipeline triages first. It parses every page deterministically, then sends 
 Python 3.9 or newer.
 
 ```bash
-pip install -e .
+pip install .                 # or: pip install -e .  to work on it
 ```
+
+From another project, install it straight from the repository:
+
+```bash
+pip install git+https://github.com/mcjbyday/PDF2MD-hybrid.git
+```
+
+Each stage is a command — `pdf2md` runs all of them, and `pdf2md-probe`, `pdf2md-extract`, `pdf2md-enrich`, `pdf2md-assemble` and `pdf2md-index` run one each. `python -m pdf2md_hybrid.<stage> --help` documents any of them.
 
 This project has two dependencies: [`pdfplumber`](https://github.com/jsvine/pdfplumber) (MIT) for text, fonts and positions, and [`pypdfium2`](https://github.com/pypdfium2-team/pypdfium2) (Apache-2.0/BSD-3) for rasterization. Other functions are included in the standard library. This project does not require a system binary be installed.
 
@@ -48,13 +56,13 @@ Enrichment additionally requires a local model runtime — [Ollama](https://olla
 
 ```bash
 # 1. Does this pipeline have relevance to your corpus?
-python probe.py /path/to/pdfs
+pdf2md-probe /path/to/pdfs
 
 # 2. Run everything.
-python pipeline.py /path/to/pdfs --out out/ --model <your-vision-model>
+pdf2md /path/to/pdfs --out out/ --model <your-vision-model>
 
 # 3. Search what came out.
-python index.py out/md --out out/index.json --query "your question"
+pdf2md-index out/md --out out/index.json --query "your question"
 ```
 
 ### `out/`
@@ -177,8 +185,8 @@ Failures are recorded as lines too, with an error.
 Files are independent, so you can work through a corpus in batches:
 
 ```bash
-python extract.py corpus/ --files doc-a,doc-b --out out/
-python enrich.py out/ --files doc-a,doc-b --model <your-vision-model> --corpus corpus/
+pdf2md-extract corpus/ --files doc-a,doc-b --out out/
+pdf2md-enrich out/ --files doc-a,doc-b --model <your-vision-model> --corpus corpus/
 ```
 
 ---
@@ -191,15 +199,44 @@ The shape this project recommends is a small always-loaded outline plus per-quer
 
 ---
 
+## Using it from another project
+
+Two calls: one to produce the Markdown, one to read it.
+
+```python
+from pdf2md_hybrid import convert, is_text_native, Corpus
+
+if not is_text_native("pdfs/"):
+    raise SystemExit("scanned corpus — use OCR instead")
+
+corpus = convert("pdfs/", "out/", model="your-vision-model")
+```
+
+`Corpus` is the read side, and it needs **neither a model nor the source PDFs** — only the `out/` directory a run left behind. The service that answers questions can be a different machine from the one that did the extraction.
+
+```python
+corpus = Corpus.open("out/")
+
+corpus.outline_markdown()          # a map of what exists, small enough to keep loaded
+corpus.search("governor limits")   # ranked pages, best first
+corpus.context("governor limits")  # those pages joined and cited, ready for a prompt
+corpus.page("manual-a", "p031")    # one page, addressed by its stable anchor
+corpus.snapshot()                  # what produced this text
+```
+
+Each hit carries a `cite` like `manual-a#p031`. Anchors are stable across re-runs, so a citation stays valid as long as the source PDF does — which is what lets an answer point at where it came from.
+
+That shape is the intended one: a small always-loaded outline, plus per-query retrieval of a few pages. Not the whole corpus in a context window — see [Sizing your output](#sizing-your-output).
+
 ## Troubleshooting
 
 **`cannot reach the model at http://localhost:11434`** — the runtime is not running, or is on another port. Start it, or pass `--endpoint`. Extraction does not need it. Enrichment does.
 
 **The model name is rejected** — `--model` must name a model the runtime has already pulled, spelled exactly as it lists it.
 
-**A page came out scrambled** — extraction and enrichment are separate stages writing separate fields, so run `extract.py` alone on that one file and look at its `blocks` to see which stage produced the problem. Multi-column ordering can produce this; see [Known limitations](#known-limitations).
+**A page came out scrambled** — extraction and enrichment are separate stages writing separate fields, so run `pdf2md-extract` alone on that one file and look at its `blocks` to see which stage produced the problem. Multi-column ordering can produce this; see [Known limitations](#known-limitations).
 
-**Almost nothing was extracted** — run `probe.py`. An exit code of `2` means the corpus is scanned, not born-digital, and this is the wrong tool.
+**Almost nothing was extracted** — run `pdf2md-probe`. An exit code of `2` means the corpus is scanned, not born-digital, and this is the wrong tool.
 
 **Too many or too few pages flagged** — the thresholds are corpus-specific. Re-tune `--image-frac` and `--text-floor`, checking the counts `probe.py` reports.
 
@@ -227,7 +264,7 @@ The shape this project recommends is a small always-loaded outline plus per-quer
 Every run writes `out/pipeline.snapshot.json`: the flags, the model, the prompt, the dependency versions, the tool's own git revision, and the heuristic ratios of the run. 
 
 ```bash
-python pipeline.py corpus/ --out out2/ --config out/pipeline.snapshot.json
+pdf2md corpus/ --out out2/ --config out/pipeline.snapshot.json
 ```
 
 replays a previous run's settings. Anything you type still wins, so a replay can be adjusted one flag at a time, and any drift from the snapshot — a changed prompt, a bumped library, an edited constant — is reported before the run starts rather than discovered afterwards.

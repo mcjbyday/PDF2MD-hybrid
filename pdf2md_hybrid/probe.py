@@ -25,13 +25,14 @@ import json
 import os
 import statistics
 import sys
+from typing import List, Optional
 
 try:
     import pdfplumber
 except ImportError:
     sys.exit("pdfplumber is required: pip install -e .")
 
-import common
+from . import common
 
 # The triage thresholds live in common.py and are shared with every other stage,
 # so that what the probe predicts is exactly what extraction will do. A page is
@@ -80,7 +81,7 @@ def scan_file(path: str, image_frac: float, text_floor: int) -> dict:
     return rec
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("paths", nargs="+", help="PDF files, or directories to search for them")
     ap.add_argument("--image-frac", type=float, default=IMAGE_FRAC,
@@ -88,7 +89,7 @@ def main() -> int:
     ap.add_argument("--text-floor", type=int, default=TEXT_FLOOR,
                     help=f"chars below which a page's text is 'thin' (default {TEXT_FLOOR})")
     ap.add_argument("--json", metavar="PATH", help="also write the full report as JSON")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     files: list[str] = []
     for p in args.paths:
