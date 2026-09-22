@@ -185,11 +185,10 @@ python enrich.py out/ --files doc-a,doc-b --model <your-vision-model> --corpus c
 
 ## Sizing your output
 
-**Do not try to preload a corpus into a context window.** Markdown is small in bytes and large in tokens.
+**Do not try to preload a corpus into a context window.** 
 
-Long contexts also get *slower*: quadratic attention cost emerges prior to context window saturation. Likewise, a large preload will cost minutes before the first token of an answer.
+The shape this project recommends is a small always-loaded outline plus per-query retrieval of a few pages, which is what stage 6 produces. At around a megabyte of Markdown, BM25 over page-sized chunks answers in milliseconds and adds no dependency. 
 
-The practical shape is a small always-loaded outline plus per-query retrieval of a few pages, which is what stage 6 produces. At around a megabyte of Markdown, BM25 over page-sized chunks answers in milliseconds and adds no dependency. 
 ---
 
 ## Troubleshooting
