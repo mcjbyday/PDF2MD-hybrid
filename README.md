@@ -26,7 +26,7 @@ This pipeline triages first. It parses every page deterministically, then sends 
 | You just need **raw text**, no structure | `pdftotext -layout` command |
 | You have **a handful of documents** | The triage only pays for itself at scale |
 
-`probe.py` tells you which bucket you are in and this can be executed first; `--json report.json` writes a full per-file breakdown for scripting. An exit code of `0` constitues a fit and `2` suggests a corpus that appears as scanned.
+`probe.py` tells you which bucket you are in and this can be executed first; `--json report.json` writes a full per-file breakdown for scripting. An exit code of `0` constitutes a fit and `2` suggests a corpus that appears as scanned.
 
 ---
 
