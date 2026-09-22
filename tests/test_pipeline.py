@@ -439,3 +439,19 @@ def test_every_stage_main_accepts_argv(fixtures_dir, tmp_path, capsys):
     import pdf2md_hybrid
     assert pdf2md_hybrid.is_text_native(fixtures_dir) is True
     assert "VERDICT" in capsys.readouterr().out
+
+
+def test_pipeline_reaches_the_enrich_stage(fixtures_dir, tmp_path, monkeypatch):
+    """The orchestrator's enrich import is deferred, so only the --model path
+    exercises it. Nothing did, and a plain `import enrich` shipped in v0.1.0 --
+    `pdf2md --model` crashed outright while every stage worked on its own."""
+    from pdf2md_hybrid import enrich, pipeline
+
+    monkeypatch.setattr(enrich, "render_page_png", lambda *a, **k: b"\x89PNG-stub")
+    monkeypatch.setattr(enrich, "describe", FakeModel())
+
+    rc = pipeline.main([fixtures_dir, "--out", str(tmp_path / "out"),
+                        "--model", "stub", "--no-snapshot"])
+    assert rc == 0
+    doc = common.load_pages(common.pages_path(str(tmp_path / "out"), "figures"))
+    assert doc["pages"][0]["vision"]["text"].startswith("# Rendered")

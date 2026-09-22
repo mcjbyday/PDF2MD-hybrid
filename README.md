@@ -224,6 +224,10 @@ corpus.page("manual-a", "p031")    # one page, addressed by its stable anchor
 corpus.snapshot()                  # what produced this text
 ```
 
+Queries may be phrased as questions. English function words — including interrogatives like *how*, *what* and *do* — are dropped from both the index and the query, so `"how do I configure retries"` and `"configure retries"` retrieve the same page. A query that is nothing but function words returns no hits rather than guessing: a confidently retrieved irrelevant page is worse than none, because whatever consumes it cannot tell that it is unrelated.
+
+For a corpus in another language, pass your own list — `index.build(md_dir, stopwords=...)`, or `pdf2md-index --no-stopwords` to disable filtering.
+
 Each hit carries a `cite` like `manual-a#p031`. Anchors are stable across re-runs, so a citation stays valid as long as the source PDF does — which is what lets an answer point at where it came from.
 
 That shape is the intended one: a small always-loaded outline, plus per-query retrieval of a few pages. Not the whole corpus in a context window — see [Sizing your output](#sizing-your-output).

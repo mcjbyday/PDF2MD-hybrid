@@ -35,12 +35,58 @@ K1 = 1.5
 B = 0.75
 
 _WORD = re.compile(r"[A-Za-z0-9_]+")
+
+# The schema of a written index. Bumped when a change makes a stored index
+# incompatible with the code that reads it -- stopword filtering does, because
+# an index built without it holds document frequencies for terms the query path
+# no longer produces. A stale index is rejected rather than served: retrieval
+# fails silently, so the failure has to be made loud somewhere.
+SCHEMA = 2
+
+# English function words, removed from both the index and the query.
+#
+# This is a curated list, not a frequency cutoff, and that is the whole point.
+# BM25's IDF term already damps words that appear in nearly every document, and
+# it handles "the" and "a" correctly on its own. It cannot handle these, because
+# in a technical corpus the worst offenders are *rare*: formal documentation
+# seldom says "I", so BM25 reads "i" as a highly discriminative term and scores
+# it above a genuine content word. The offenders sit in exactly the frequency
+# band BM25 is designed to reward, so no threshold can separate them and the
+# list has to be semantic.
+#
+# Interrogatives matter most here. The read path is documented as taking a
+# question, so "how do I ..." is the expected shape of a query, not an edge case.
+STOPWORDS = frozenset("""
+a an the this that these those
+i you he she it we they me my your his her its our their
+is are was were be been being am
+do does did done doing
+have has had having
+can could should would will shall may might must
+how what why when where which who whom whose
+and or but nor so yet if then than because
+of in on at to for from by with without about into over under
+as not no nor too very just only also
+""".split())
 _ANCHOR = re.compile(r"\{#(p\d+)\}|<a id=\"(p\d+)\">")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)(?:\s*\{#p\d+\})?\s*$")
 
 
-def tokenize(text: str) -> List[str]:
-    return [w.lower() for w in _WORD.findall(text)]
+def tokenize(text: str, stopwords: Optional[Iterable[str]] = None) -> List[str]:
+    """Split text into scored terms, dropping function words.
+
+    One definition, used by both the index and the query path. Filtering in only
+    one of them would leave the two disagreeing about what a term is, which is
+    the kind of asymmetry that surfaces much later as an inexplicable ranking.
+
+    Single characters are kept unless they are stopwords: `c`, `r` and `k` are
+    real terms in a technical corpus, so length is never the test.
+
+    Pass `stopwords` to supply another language's list, or an empty collection
+    to disable filtering entirely.
+    """
+    stops = STOPWORDS if stopwords is None else frozenset(stopwords)
+    return [w for w in (m.lower() for m in _WORD.findall(text)) if w not in stops]
 
 
 def split_pages(markdown: str) -> List[Tuple[str, str]]:
@@ -71,7 +117,8 @@ def strip_front_matter(text: str) -> str:
     return text
 
 
-def build(md_dir: str, only: Optional[Iterable[str]] = None) -> Dict[str, Any]:
+def build(md_dir: str, only: Optional[Iterable[str]] = None,
+          stopwords: Optional[Iterable[str]] = None) -> Dict[str, Any]:
     outline: List[Dict[str, Any]] = []
     docs: List[Dict[str, Any]] = []
     df: Dict[str, int] = {}
@@ -92,7 +139,7 @@ def build(md_dir: str, only: Optional[Iterable[str]] = None) -> Dict[str, Any]:
                     outline.append({"file": name, "anchor": anchor,
                                     "level": len(heading.group(1)),
                                     "heading": heading.group(2).strip()})
-            tokens = tokenize(chunk)
+            tokens = tokenize(chunk, stopwords)
             if not tokens:
                 continue
             freqs: Dict[str, int] = {}
@@ -112,13 +159,22 @@ def build(md_dir: str, only: Optional[Iterable[str]] = None) -> Dict[str, Any]:
             })
 
     avgdl = sum(d["len"] for d in docs) / len(docs) if docs else 0.0
-    return {"md_dir": os.path.abspath(md_dir), "outline": outline,
-            "docs": docs, "df": df, "avgdl": avgdl, "n_docs": len(docs)}
+    return {"schema": SCHEMA, "md_dir": os.path.abspath(md_dir), "outline": outline,
+            "docs": docs, "df": df, "avgdl": avgdl, "n_docs": len(docs),
+            # Recorded so a reader can tell a filtered index from an unfiltered
+            # one, and so a non-English list travels with the index it built.
+            "stopwords": sorted(STOPWORDS if stopwords is None else frozenset(stopwords))}
 
 
 def search(index: Dict[str, Any], query: str, k: int = 5) -> List[Dict[str, Any]]:
-    """Rank page chunks against the query. IDF is computed here, not stored."""
-    terms = tokenize(query)
+    """Rank page chunks against the query. IDF is computed here, not stored.
+
+    A query that is entirely function words returns nothing. It must not fall
+    back to the unfiltered tokens: a confident hit on an irrelevant page is
+    worse than no hit at all, because the caller feeds it to a model as
+    reference material with no way to tell that it is unrelated.
+    """
+    terms = tokenize(query, index.get("stopwords"))
     if not terms or not index.get("docs"):
         return []
     n = index["n_docs"]
@@ -150,8 +206,15 @@ def search(index: Dict[str, Any], query: str, k: int = 5) -> List[Dict[str, Any]
 
 
 def load(path: str) -> Dict[str, Any]:
+    """Read a written index, refusing one this code cannot score correctly."""
     with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+        index = json.load(fh)
+    found = index.get("schema", 1)
+    if found != SCHEMA:
+        raise ValueError(
+            f"{path}: index schema {found}, this build reads {SCHEMA}. "
+            "Rebuild it -- indexing a corpus takes seconds.")
+    return index
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -160,6 +223,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("md_dir", help="directory of assembled Markdown")
     ap.add_argument("--out", default=None, help="index path (default MD_DIR/../index.json)")
     ap.add_argument("--files", help="comma-separated stems to index, instead of all")
+    ap.add_argument("--no-stopwords", action="store_true",
+                    help="index every word, including function words "
+                         "(for a corpus this list's language does not fit)")
     ap.add_argument("--query", help="build, then run this query and print the hits")
     ap.add_argument("-k", type=int, default=5, help="results to show with --query")
     args = ap.parse_args(argv)
@@ -168,7 +234,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Not a directory: {args.md_dir}. Run assemble.py first.", file=sys.stderr)
         return 1
 
-    index = build(args.md_dir, common.parse_files_flag(args.files))
+    index = build(args.md_dir, common.parse_files_flag(args.files),
+                  stopwords=frozenset() if args.no_stopwords else None)
     if not index["docs"]:
         print(f"No Markdown found in {args.md_dir}.", file=sys.stderr)
         return 1
